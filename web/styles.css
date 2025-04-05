@@ -1,0 +1,25 @@
+#local-api-response-popup {
+    position: absolute; /* Crucial for positioning */
+    z-index: 99999; /* Ensure it's on top */
+    background-color: #f8f9fa;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: sans-serif;
+    font-size: 13px;
+    color: #212529;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    max-width: 300px; /* Prevent it from becoming too wide */
+    overflow-wrap: break-word; /* Wrap long words */
+    /* Add transitions for smoother appearance (optional) */
+    opacity: 0;
+    transform: translateY(-5px);
+    animation: fadeInPopup 0.2s ease-out forwards;
+}
+
+@keyframes fadeInPopup {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
