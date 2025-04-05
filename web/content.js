@@ -1,6 +1,7 @@
-let apiPopup = null; // To hold the reference to our popup div
+let apiPopup = null;
+let apiButton = null;
 
-// Function to remove the existing popup
+// Remove popup if it exists
 function removePopup() {
     if (apiPopup && apiPopup.parentNode) {
         apiPopup.parentNode.removeChild(apiPopup);
@@ -8,102 +9,153 @@ function removePopup() {
     }
 }
 
-// Function to create and show the popup
+// Remove button if it exists
+function removeButton() {
+    if (apiButton && apiButton.parentNode) {
+        apiButton.parentNode.removeChild(apiButton);
+        apiButton = null;
+    }
+}
+
+// Show popup with simplified text
 function showPopup(text, x, y) {
-    removePopup(); // Remove any existing popup first
+    console.log("🚀 showPopup called with:", text);
+    removePopup();
 
     apiPopup = document.createElement('div');
     apiPopup.id = 'local-api-response-popup';
-    apiPopup.textContent = 'Loading...'; // Initial text
+    apiPopup.textContent = 'Loading...';
 
-    // Basic positioning near the selection end
-    apiPopup.style.left = `${x}px`;
-    apiPopup.style.top = `${y}px`;
+    Object.assign(apiPopup.style, {
+        position: 'absolute',
+        left: `${x}px`,
+        top: `${y}px`,
+        zIndex: 9999,
+        maxWidth: '300px',
+        padding: '10px',
+        backgroundColor: '#f5f5f5',
+        border: '1px solid #ccc',
+        borderRadius: '8px',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+        fontSize: '14px'
+    });
 
     document.body.appendChild(apiPopup);
 
-    // --- Call the Local API ---
     callLocalApi(text)
         .then(responseText => {
-            if (apiPopup) { // Check if popup still exists
-                 apiPopup.textContent = responseText; // Update with API response
+            console.log("✅ API response received:", responseText);
+            if (apiPopup) {
+                apiPopup.textContent = responseText;
             }
         })
         .catch(error => {
-             console.error("API Call Error:", error);
-             if (apiPopup) { // Check if popup still exists
-                 apiPopup.textContent = `Error: ${error.message}`; // Show error in popup
-                 apiPopup.style.backgroundColor = '#ffdddd'; // Indicate error visually
-             }
+            console.error("API Call Error:", error);
+            if (apiPopup) {
+                apiPopup.textContent = `Error: ${error.message}`;
+                apiPopup.style.backgroundColor = '#ffdddd';
+            }
         });
 }
 
-// Function to make the API call
+// Call your Flask API
 async function callLocalApi(selectedText) {
-    const apiUrl = 'http://localhost:5000/simplify'; // CHANGE if your endpoint is different
+    const apiUrl = 'http://localhost:5000/simplify';
 
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ text: selectedText }) // Send text in JSON body
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: selectedText })
         });
 
         if (!response.ok) {
-            // Try to get error message from API response body if possible
-            let errorBody = await response.text(); // Or response.json() if API sends JSON errors
+            const errorBody = await response.json();
             throw new Error(`API Error (${response.status}): ${errorBody || response.statusText}`);
         }
 
-        const responseData = await response.text(); // Assuming API returns plain text
-        // If API returns JSON: const responseData = await response.json();
-        // Then access the relevant field: return responseData.processed_text;
-
-        return responseData;
+        const json = await response.json();
+        return json.reformulated_text;
 
     } catch (error) {
         console.error("Fetch failed:", error);
-        // Handle network errors or CORS issues specifically if needed
-        if (error instanceof TypeError) { // Often indicates network issue or CORS
-             throw new Error("Network error or CORS issue. Is the local API running and configured for CORS?");
+        if (error instanceof TypeError) {
+            throw new Error("Network error or CORS issue. Is the local API running?");
         }
-        throw error; // Re-throw other errors
+        throw error;
     }
 }
 
+// Show the floating action button
+function showActionButton(x, y, selectedText) {
+    removePopup();
+    removeButton();
 
-// --- Event Listener for Text Selection ---
-document.addEventListener('mouseup', (event) => {
-    const selectedText = window.getSelection().toString().trim();
-
-    if (selectedText.length > 0) {
-        // Get selection position
-        const range = window.getSelection().getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-
-        // Calculate position for the popup (bottom-right of selection)
-        // Adjust these offsets as needed
-        const popupX = window.scrollX + rect.right;
-        const popupY = window.scrollY + rect.bottom + 5; // 5px below selection
-
-        console.log("Selected:", selectedText);
-        showPopup(selectedText, popupX, popupY);
-
-    } else {
-        // If no text is selected (e.g., just a click), remove the popup
-        // Add a small delay to allow clicking inside the popup if needed (optional)
-         // setTimeout(removePopup, 100);
+    if (!selectedText) {
+        console.warn("⚠️ No selected text found.");
+        return;
     }
+
+    console.log("📌 Showing button for:", selectedText);
+
+    apiButton = document.createElement('button');
+    apiButton.textContent = "Simplify Text";
+
+    Object.assign(apiButton.style, {
+        position: 'absolute',
+        left: `${x}px`,
+        top: `${y}px`,
+        zIndex: 9999,
+        padding: '6px 10px',
+        backgroundColor: '#007bff',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+        fontSize: '14px'
+    });
+
+    apiButton.addEventListener('click', () => {
+        console.log("🟢 Simplify button clicked");
+        showPopup(selectedText, x + 10, y + 30);
+        removeButton();
+    });
+
+    document.body.appendChild(apiButton);
+}
+
+// --- Main event listener for text selection ---
+document.addEventListener('mouseup', (event) => {
+    if (apiButton && apiButton.contains(event.target)) return;
+
+    setTimeout(() => {
+        const selectedText = window.getSelection().toString().trim();
+
+        if (selectedText.length > 0) {
+            const range = window.getSelection().getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+
+            const popupX = window.scrollX + rect.right;
+            const popupY = window.scrollY + rect.bottom + 5;
+
+            console.log("🖱️ Selected:", selectedText);
+            showActionButton(popupX, popupY, selectedText);
+        } else {
+            removePopup();
+            removeButton();
+        }
+    }, 10);
 });
 
-// Add listener to remove popup if clicking elsewhere on the page
+// Cleanup on outside click
 document.addEventListener('mousedown', (event) => {
-    // Check if the click is outside the popup
     if (apiPopup && !apiPopup.contains(event.target)) {
         removePopup();
     }
+    if (apiButton && !apiButton.contains(event.target)) {
+        removeButton();
+    }
 });
 
-console.log("Local API Text Selector content script loaded.");
+console.log("✅ Local API Text Simplifier Extension Loaded.");
