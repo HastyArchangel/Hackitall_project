@@ -1,3 +1,5 @@
+@import url('https://cdn.jsdelivr.net/gh/antijingoist/open-dyslexic/web/OpenDyslexic.css');
+
 #local-api-response-popup {
     position: absolute; /* Crucial for positioning */
     z-index: 99999; /* Ensure it's on top */
@@ -5,7 +7,7 @@
     border: 1px solid #ced4da;
     border-radius: 4px;
     padding: 8px 12px;
-    font-family: sans-serif;
+    font-family: 'OpenDyslexic', Arial, sans-serif;
     font-size: 13px;
     color: #212529;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
