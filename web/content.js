@@ -31,7 +31,7 @@ function showPopup(text, selectionCenterX, bottomY) {
     const leftX = selectionCenterX - popupWidth / 2;
     const topY = bottomY + 20;
 
-    // Style the popup container
+    // Main popup container styles
     Object.assign(apiPopup.style, {
         position: 'absolute',
         left: `${leftX}px`,
@@ -46,14 +46,15 @@ function showPopup(text, selectionCenterX, bottomY) {
         lineHeight: '1.6',
         color: '#212529',
         overflowWrap: 'break-word',
-        fontFamily: 'sans-serif'
+        fontFamily: 'sans-serif',
+        userSelect: 'none' // 🔒 Make text non-selectable
     });
 
-    // Create the header bar (with info and close button)
+    // --- HEADER BAR ---
     const headerBar = document.createElement('div');
     Object.assign(headerBar.style, {
         display: 'flex',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         alignItems: 'center',
         padding: '6px 10px',
         borderBottom: '1px solid #ddd',
@@ -63,18 +64,19 @@ function showPopup(text, selectionCenterX, bottomY) {
         borderTopRightRadius: '10px'
     });
 
-    // Info button with tooltip
+    // ℹ️ Info Button
     const infoButton = document.createElement('span');
     infoButton.textContent = 'ℹ️';
     Object.assign(infoButton.style, {
         marginRight: '8px',
         cursor: 'pointer',
-        position: 'relative'
+        position: 'relative',
+        userSelect: 'auto'
     });
 
-    // Tooltip element
+    // Tooltip for info
     const tooltip = document.createElement('div');
-    tooltip.textContent = 'Reading ease improved by ~43%'; // Placeholder text
+    tooltip.textContent = ''; // Will be set later
     Object.assign(tooltip.style, {
         visibility: 'hidden',
         backgroundColor: '#333',
@@ -93,7 +95,8 @@ function showPopup(text, selectionCenterX, bottomY) {
         transition: 'opacity 0.3s'
     });
 
-    // Show/hide tooltip on hover
+    infoButton.appendChild(tooltip);
+
     infoButton.addEventListener('mouseenter', () => {
         tooltip.style.visibility = 'visible';
         tooltip.style.opacity = '1';
@@ -103,55 +106,88 @@ function showPopup(text, selectionCenterX, bottomY) {
         tooltip.style.opacity = '0';
     });
 
-    infoButton.appendChild(tooltip);
-    headerBar.appendChild(infoButton);
+    // 📋 Copy Button
+    const copyButton = document.createElement('span');
+    copyButton.textContent = '📋';
+    copyButton.title = 'Copy to clipboard';
+    Object.assign(copyButton.style, {
+        cursor: 'pointer',
+        marginRight: '10px',
+        userSelect: 'auto'
+    });
 
-    // Close button
+    copyButton.onclick = () => {
+        if (content && content.textContent) {
+            navigator.clipboard.writeText(content.textContent).then(() => {
+                copyButton.textContent = '✅';
+                setTimeout(() => {
+                    copyButton.textContent = '📋';
+                }, 1000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
+        }
+    };
+
+    // ❌ Close Button
     const closeButton = document.createElement('span');
     closeButton.textContent = '✖';
     Object.assign(closeButton.style, {
         cursor: 'pointer',
-        fontWeight: 'bold'
+        fontWeight: 'bold',
+        userSelect: 'auto'
     });
     closeButton.onclick = () => removePopup();
-    headerBar.appendChild(closeButton);
 
-    // Content container
+    // Left and Right Header Sections
+    const leftWrapper = document.createElement('div');
+    leftWrapper.appendChild(infoButton);
+
+    const rightWrapper = document.createElement('div');
+    rightWrapper.style.display = 'flex';
+    rightWrapper.style.gap = '8px';
+    rightWrapper.appendChild(copyButton);
+    rightWrapper.appendChild(closeButton);
+
+    headerBar.appendChild(leftWrapper);
+    headerBar.appendChild(rightWrapper);
+
+    // --- CONTENT AREA ---
     const content = document.createElement('div');
     content.textContent = 'Loading...';
     Object.assign(content.style, {
         padding: '14px 18px'
     });
 
+    // Assemble popup
     apiPopup.appendChild(headerBar);
     apiPopup.appendChild(content);
     document.body.appendChild(apiPopup);
 
-    // Load the actual response
+    // API result handler
     currentPreloadPromise
-    .then(function(data) {
-        console.log("✅ API full response received:", data);
+        .then(function(data) {
+            console.log("✅ API full response received:", data);
 
-        let reformulated_text = data.reformulated_text || 'No reformulated text';
-        let original_score = parseFloat(data.original_score) || 0;
-        let simplified_score = parseFloat(data.simplified_score) || 0;
-        let semantic_similarity = parseFloat(data.semantic_similarity) || 0;
+            let reformulated_text = data.reformulated_text || 'No reformulated text';
+            let original_score = parseFloat(data.original_score) || 0;
+            let simplified_score = parseFloat(data.simplified_score) || 0;
 
-        let difficultyDrop = 'N/A';
-        if (original_score > 0 && simplified_score >= 0) {
-            difficultyDrop = ((1 - simplified_score / original_score) * 100).toFixed(1);
-        }
+            let difficultyDrop = 'N/A';
+            if (original_score > 0 && simplified_score >= 0) {
+                difficultyDrop = ((1 - simplified_score / original_score) * 100).toFixed(1);
+            }
 
-        content.textContent = reformulated_text;
-        tooltip.textContent = `Difficulty decreased by ${difficultyDrop}%`;
-    })
-    .catch(function(error) {
-        console.error("API Call Error:", error);
-        if (content) {
-            content.textContent = `Error: ${error.message}`;
-            content.style.backgroundColor = '#ffdddd';
-        }
-    });
+            content.textContent = reformulated_text;
+            tooltip.textContent = `Difficulty decreased by ${difficultyDrop}%`;
+        })
+        .catch(function(error) {
+            console.error("API Call Error:", error);
+            if (content) {
+                content.textContent = `Error: ${error.message}`;
+                content.style.backgroundColor = '#ffdddd';
+            }
+        });
 }
 
 // Call your Flask API (preloading)
