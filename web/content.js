@@ -31,7 +31,7 @@ function showPopup(text, selectionCenterX, bottomY) {
     const leftX = selectionCenterX - popupWidth / 2;
     const topY = bottomY + 20;
 
-    // Main popup container styles
+    // Popup container styles
     Object.assign(apiPopup.style, {
         position: 'absolute',
         left: `${leftX}px`,
@@ -47,10 +47,10 @@ function showPopup(text, selectionCenterX, bottomY) {
         color: '#212529',
         overflowWrap: 'break-word',
         fontFamily: 'sans-serif',
-        userSelect: 'none' // 🔒 Make text non-selectable
+        userSelect: 'none'
     });
 
-    // --- HEADER BAR ---
+    // Header bar
     const headerBar = document.createElement('div');
     Object.assign(headerBar.style, {
         display: 'flex',
@@ -64,7 +64,30 @@ function showPopup(text, selectionCenterX, bottomY) {
         borderTopRightRadius: '10px'
     });
 
-    // ℹ️ Info Button
+    // 📋 Copy Button (left side)
+    const copyButton = document.createElement('span');
+    copyButton.textContent = '📋';
+    copyButton.title = 'Copy to clipboard';
+    Object.assign(copyButton.style, {
+        cursor: 'pointer',
+        userSelect: 'auto'
+    });
+
+    // Will copy content text
+    copyButton.onclick = () => {
+        if (content && content.textContent) {
+            navigator.clipboard.writeText(content.textContent).then(() => {
+                copyButton.textContent = '✅';
+                setTimeout(() => {
+                    copyButton.textContent = '📋';
+                }, 1000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+            });
+        }
+    };
+
+    // ℹ️ Info button (right)
     const infoButton = document.createElement('span');
     infoButton.textContent = 'ℹ️';
     Object.assign(infoButton.style, {
@@ -74,9 +97,8 @@ function showPopup(text, selectionCenterX, bottomY) {
         userSelect: 'auto'
     });
 
-    // Tooltip for info
     const tooltip = document.createElement('div');
-    tooltip.textContent = ''; // Will be set later
+    tooltip.textContent = '';
     Object.assign(tooltip.style, {
         visibility: 'hidden',
         backgroundColor: '#333',
@@ -96,7 +118,6 @@ function showPopup(text, selectionCenterX, bottomY) {
     });
 
     infoButton.appendChild(tooltip);
-
     infoButton.addEventListener('mouseenter', () => {
         tooltip.style.visibility = 'visible';
         tooltip.style.opacity = '1';
@@ -105,29 +126,6 @@ function showPopup(text, selectionCenterX, bottomY) {
         tooltip.style.visibility = 'hidden';
         tooltip.style.opacity = '0';
     });
-
-    // 📋 Copy Button
-    const copyButton = document.createElement('span');
-    copyButton.textContent = '📋';
-    copyButton.title = 'Copy to clipboard';
-    Object.assign(copyButton.style, {
-        cursor: 'pointer',
-        marginRight: '10px',
-        userSelect: 'auto'
-    });
-
-    copyButton.onclick = () => {
-        if (content && content.textContent) {
-            navigator.clipboard.writeText(content.textContent).then(() => {
-                copyButton.textContent = '✅';
-                setTimeout(() => {
-                    copyButton.textContent = '📋';
-                }, 1000);
-            }).catch(err => {
-                console.error('Copy failed:', err);
-            });
-        }
-    };
 
     // ❌ Close Button
     const closeButton = document.createElement('span');
@@ -139,20 +137,20 @@ function showPopup(text, selectionCenterX, bottomY) {
     });
     closeButton.onclick = () => removePopup();
 
-    // Left and Right Header Sections
+    // Header layout
     const leftWrapper = document.createElement('div');
-    leftWrapper.appendChild(infoButton);
+    leftWrapper.appendChild(copyButton); // 📋 on the left
 
     const rightWrapper = document.createElement('div');
     rightWrapper.style.display = 'flex';
     rightWrapper.style.gap = '8px';
-    rightWrapper.appendChild(copyButton);
-    rightWrapper.appendChild(closeButton);
+    rightWrapper.appendChild(infoButton);  // ℹ️
+    rightWrapper.appendChild(closeButton); // ❌
 
     headerBar.appendChild(leftWrapper);
     headerBar.appendChild(rightWrapper);
 
-    // --- CONTENT AREA ---
+    // Content area
     const content = document.createElement('div');
     content.textContent = 'Loading...';
     Object.assign(content.style, {
@@ -164,7 +162,7 @@ function showPopup(text, selectionCenterX, bottomY) {
     apiPopup.appendChild(content);
     document.body.appendChild(apiPopup);
 
-    // API result handler
+    // Load API data
     currentPreloadPromise
         .then(function(data) {
             console.log("✅ API full response received:", data);
