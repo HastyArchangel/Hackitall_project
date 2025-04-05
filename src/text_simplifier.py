@@ -1,11 +1,14 @@
 def call_simplify_on_gemini_model(client, text):
-    base_prompt = """Adapt the text below to be dyslexia-friendly. Follow these guidelines:
-*   Use simple words and short sentences.
-*   Use short paragraphs with clear breaks.
-*   Focus on clarity and ease of reading. Keep the original meaning as much as you can.
-*   Prioritise semantic similarity over making the text very simple, the original context shouldremain the same.
-*   Reply only with the answer in plain text format. Do not provide aditional information.
-"""
+    base_prompt = """**Apply these simplification rules:**
+                    *   **Sentences:** Keep them medium length.
+                    *   **Words:** Use simple, common words. Avoid complex ones.
+                    *   **Paragraphs:** Break into short chunks. No dense blocks.
+                    *   **Language:** Be direct and clear.
+                    *   **Voice:** Use active voice. Avoid passive.
+                    *   **Idioms:** Remove or explain them literally.
+                    *   **Meaning:** Retain the core message. Aim for meaning similarity with the original. Don't lose key information.
+                    **Output Instruction: Provide ONLY the rewritten text as your response. Do not include any introductory phrases, explanations, or concluding remarks.**
+                    **Original Text:**"""
     query = base_prompt + "\"" + text + "\""
     return client.models.generate_content(
         model="gemini-2.5-pro-exp-03-25",
