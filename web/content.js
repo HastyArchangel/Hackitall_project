@@ -1,5 +1,7 @@
 let apiPopup = null;
 let apiButton = null;
+let currentPreloadPromise = null;
+let currentSelectedText = null;
 
 // Remove popup if it exists
 function removePopup() {
@@ -17,8 +19,8 @@ function removeButton() {
     }
 }
 
-// Show popup with simplified text
-function showPopup(text, x, y) {
+// Show popup with the provided text
+function showPopup(text, selectionCenterX, bottomY) {
     console.log("🚀 showPopup called with:", text);
     removePopup();
 
@@ -26,23 +28,31 @@ function showPopup(text, x, y) {
     apiPopup.id = 'local-api-response-popup';
     apiPopup.textContent = 'Loading...';
 
+    const popupWidth = 500;
+    const leftX = selectionCenterX - popupWidth / 2;
+    const topY = bottomY + 20; // Slightly below selection
+
     Object.assign(apiPopup.style, {
         position: 'absolute',
-        left: `${x}px`,
-        top: `${y}px`,
+        left: `${leftX}px`,
+        top: `${topY}px`,
         zIndex: 9999,
-        maxWidth: '300px',
-        padding: '10px',
+        maxWidth: `${popupWidth}px`,
+        padding: '14px 18px',
         backgroundColor: '#f5f5f5',
-        border: '1px solid #ccc',
-        borderRadius: '8px',
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-        fontSize: '14px'
+        border: '2px solid #28a745',
+        borderRadius: '10px',
+        boxShadow: '0 4px 10px rgba(0, 0, 0, 0.2)',
+        fontSize: '16px',
+        lineHeight: '1.6',
+        color: '#212529',
+        overflowWrap: 'break-word',
+        fontFamily: 'sans-serif'
     });
 
     document.body.appendChild(apiPopup);
 
-    callLocalApi(text)
+    currentPreloadPromise
         .then(responseText => {
             console.log("✅ API response received:", responseText);
             if (apiPopup) {
@@ -58,7 +68,7 @@ function showPopup(text, x, y) {
         });
 }
 
-// Call your Flask API
+// Call your Flask API (preloading)
 async function callLocalApi(selectedText) {
     const apiUrl = 'http://localhost:5000/simplify';
 
@@ -87,7 +97,7 @@ async function callLocalApi(selectedText) {
 }
 
 // Show the floating action button
-function showActionButton(x, y, selectedText) {
+function showActionButton(x, y, selectedText, selectionCenterX, selectionBottomY) {
     removePopup();
     removeButton();
 
@@ -113,12 +123,13 @@ function showActionButton(x, y, selectedText) {
         borderRadius: '4px',
         cursor: 'pointer',
         boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-        fontSize: '14px'
+        fontSize: '14px',
+        fontFamily: 'sans-serif'
     });
 
     apiButton.addEventListener('click', () => {
         console.log("🟢 Simplify button clicked");
-        showPopup(selectedText, x + 10, y + 30);
+        showPopup(selectedText, selectionCenterX, selectionBottomY);
         removeButton();
     });
 
@@ -127,25 +138,42 @@ function showActionButton(x, y, selectedText) {
 
 // --- Main event listener for text selection ---
 document.addEventListener('mouseup', (event) => {
+    // Don't trigger if clicking on the button itself
     if (apiButton && apiButton.contains(event.target)) return;
 
     setTimeout(() => {
-        const selectedText = window.getSelection().toString().trim();
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
 
-        if (selectedText.length > 0) {
-            const range = window.getSelection().getRangeAt(0);
-            const rect = range.getBoundingClientRect();
+        if (selectedText.length > 0 && selectedText !== currentSelectedText) {
+            const range = selection.getRangeAt(0);
 
-            const popupX = window.scrollX + rect.right;
-            const popupY = window.scrollY + rect.bottom + 5;
+            // ✅ Get exact starting position of selection
+            const startRange = range.cloneRange();
+            startRange.collapse(true); // Collapse to the start of the selection
+            const startRect = startRange.getBoundingClientRect();
+
+            // Position the button right above the starting point of the selection
+            const buttonX = window.scrollX + startRect.left - 2;
+            const buttonY = window.scrollY + startRect.top - 35;
+
+            // For centering the popup below selection
+            const centerX = window.scrollX + (startRect.left + startRect.right) / 2;
+            const bottomY = window.scrollY + startRect.bottom;
 
             console.log("🖱️ Selected:", selectedText);
-            showActionButton(popupX, popupY, selectedText);
-        } else {
+
+            currentSelectedText = selectedText;
+            currentPreloadPromise = callLocalApi(selectedText);
+
+            showActionButton(buttonX, buttonY, selectedText, centerX, bottomY);
+        } else if (selectedText.length === 0) {
             removePopup();
             removeButton();
+            currentSelectedText = null;
+            currentPreloadPromise = null;
         }
-    }, 10);
+    }, 10); // Let selection finalize before reading it
 });
 
 // Cleanup on outside click
