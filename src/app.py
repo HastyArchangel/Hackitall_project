@@ -5,12 +5,14 @@ import nltk
 from nltk.corpus import words
 import os
 from sentence_transformers import SentenceTransformer
+from flask_cors import CORS # Import CORS
 
 from dyslexia_scorer import dyslexia_score
 from text_simplifier import call_simplify_on_gemini_model
 from text_comparer import semantic_similarity
 
 app = Flask(__name__)
+CORS(app)
 
 # Gemini
 load_dotenv()

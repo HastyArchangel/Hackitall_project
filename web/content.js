@@ -40,7 +40,7 @@ function showPopup(text, x, y) {
 
 // Function to make the API call
 async function callLocalApi(selectedText) {
-    const apiUrl = 'http://localhost:5000/process'; // CHANGE if your endpoint is different
+    const apiUrl = 'http://localhost:5000/simplify'; // CHANGE if your endpoint is different
 
     try {
         const response = await fetch(apiUrl, {

@@ -8,6 +8,6 @@ def call_simplify_on_gemini_model(client, text):
 """
     query = base_prompt + "\"" + text + "\""
     return client.models.generate_content(
-        model="gemini-2.5-pro-exp-03-25",
+        model="gemini-2.0-flash",
         contents=query,
     ).text
