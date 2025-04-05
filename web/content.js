@@ -1,8 +1,9 @@
 // --- Global Variables ---
 let apiPopup = null;            // Reference to the simplification result popup
-let actionButtonContainer = null; // << NEW: Container for BOTH buttons
+let actionButtonContainer = null; // Reference to the container holding the action buttons
 let currentPreloadPromise = null;// Promise for the preloaded API call
 let currentSelectedText = null; // Currently selected text to avoid re-triggering
+let currentReformulatedText = null; // Store reformulated text for feedback
 let utterance = null;           // To hold the current speech utterance
 
 // --- Cleanup Functions ---
@@ -13,13 +14,13 @@ function removePopup() {
         apiPopup.parentNode.removeChild(apiPopup);
         apiPopup = null;
     }
-    // Stop any ongoing speech when popup is removed (good practice)
+    // Stop any ongoing speech when popup is removed
     if (window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
     }
 }
 
-// << MODIFIED: Remove the action button CONTAINER >>
+// Remove the action button container if it exists
 function removeButtonContainer() {
     if (actionButtonContainer && actionButtonContainer.parentNode) {
         actionButtonContainer.parentNode.removeChild(actionButtonContainer);
@@ -33,19 +34,20 @@ function removeButtonContainer() {
 
 // --- UI Creation Functions ---
 
-// Show popup with the simplification result (NO CHANGES HERE)
-function showPopup(textPromise, selectionCenterX, bottomY) {
-    console.log("🚀 showPopup called"); // Using the promise now
-    removePopup();
+// Show popup with the simplification result (MODIFIED TO ADD FOOTER/FEEDBACK BUTTONS)
+function showPopup(textDataPromise, selectionCenterX, bottomY) {
+    console.log("🚀 showPopup called");
+    removePopup(); // Ensure no old popup exists
 
     apiPopup = document.createElement('div');
     apiPopup.id = 'local-api-response-popup';
+    currentReformulatedText = null; // Reset reformulated text on new popup
 
     const popupWidth = 500;
     const leftX = selectionCenterX - popupWidth / 2;
-    const topY = bottomY + 20;
+    const topY = bottomY + 20; // Position below selection
 
-    // Popup container styles (NO CHANGES)
+    // Popup container styles
     Object.assign(apiPopup.style, {
         position: 'absolute', left: `${leftX}px`, top: `${topY}px`, zIndex: 9999,
         maxWidth: `${popupWidth}px`, backgroundColor: '#f5f5f5', border: '2px solid #28a745',
@@ -54,16 +56,16 @@ function showPopup(textPromise, selectionCenterX, bottomY) {
         fontFamily: 'sans-serif', userSelect: 'none'
     });
 
-    // Header bar (NO CHANGES)
+    // Header bar
     const headerBar = document.createElement('div');
     Object.assign(headerBar.style, {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: '6px 10px', borderBottom: '1px solid #ddd', fontSize: '14px',
         backgroundColor: '#e9fbe9', borderTopLeftRadius: '10px', borderTopRightRadius: '10px'
     });
-    const copyButton = document.createElement('span'); copyButton.textContent = '📋'; copyButton.title = 'Copy';
+    const copyButton = document.createElement('span'); copyButton.textContent = '📋'; copyButton.title = 'Copy simplified text';
     Object.assign(copyButton.style, { cursor: 'pointer', userSelect: 'auto' });
-    const infoButton = document.createElement('span'); infoButton.textContent = 'ℹ️';
+    const infoButton = document.createElement('span'); infoButton.textContent = 'ℹ️'; infoButton.title = 'Simplification Info';
     Object.assign(infoButton.style, { marginRight: '8px', cursor: 'pointer', position: 'relative', userSelect: 'auto' });
     const tooltip = document.createElement('div'); tooltip.textContent = '';
     Object.assign(tooltip.style, {
@@ -75,7 +77,7 @@ function showPopup(textPromise, selectionCenterX, bottomY) {
     infoButton.appendChild(tooltip);
     infoButton.addEventListener('mouseenter', () => { tooltip.style.visibility = 'visible'; tooltip.style.opacity = '1'; });
     infoButton.addEventListener('mouseleave', () => { tooltip.style.visibility = 'hidden'; tooltip.style.opacity = '0'; });
-    const closeButton = document.createElement('span'); closeButton.textContent = '✖';
+    const closeButton = document.createElement('span'); closeButton.textContent = '✖'; closeButton.title = 'Close';
     Object.assign(closeButton.style, { cursor: 'pointer', fontWeight: 'bold', userSelect: 'auto' });
     closeButton.onclick = removePopup;
     const leftWrapper = document.createElement('div'); leftWrapper.appendChild(copyButton);
@@ -83,51 +85,167 @@ function showPopup(textPromise, selectionCenterX, bottomY) {
     rightWrapper.appendChild(infoButton); rightWrapper.appendChild(closeButton);
     headerBar.appendChild(leftWrapper); headerBar.appendChild(rightWrapper);
 
-    // Content area (NO CHANGES)
+    // Content area
     const content = document.createElement('div');
     content.textContent = 'Loading...';
     Object.assign(content.style, { padding: '14px 18px' });
 
-    // Assemble popup (NO CHANGES)
+    // << NEW: Footer Bar for Feedback Buttons (initially empty) >>
+    const footerBar = document.createElement('div');
+    Object.assign(footerBar.style, {
+        display: 'flex',            // Arrange buttons horizontally
+        justifyContent: 'flex-start', // Align buttons to the left
+        padding: '8px 18px',        // Padding similar to content, less top/bottom
+        borderTop: '1px solid #ddd', // Separator line from content
+        marginTop: '5px',           // Space above the footer
+    });
+
+    // Assemble popup (Add footer AFTER content)
     apiPopup.appendChild(headerBar);
     apiPopup.appendChild(content);
+    apiPopup.appendChild(footerBar); // Add the initially empty footer
     document.body.appendChild(apiPopup);
 
-    // Load API data using the passed promise (NO CHANGES)
-    textPromise
+    // Load API data from the preloaded promise
+    textDataPromise
         .then(function(data) {
-             if (!apiPopup) return; // Check if popup still exists
             console.log("✅ API full response received:", data);
-            let reformulated_text = data.reformulated_text || 'No reformulated text';
-            let original_score = parseFloat(data.original_score) || 0;
-            let simplified_score = parseFloat(data.simplified_score) || 0;
-            let difficultyDrop = 'N/A';
-            if (original_score > 0 && simplified_score >= 0 && !isNaN(original_score) && !isNaN(simplified_score) && original_score !== 0) {
-                difficultyDrop = ((1 - simplified_score / original_score) * 100).toFixed(1);
+            if (!apiPopup) return; // Exit if popup was closed
+
+            // Check if simplification was successful before adding feedback buttons
+            // Assuming your Flask app returns { status: "SUCCESS", ... } on success
+            if (data && data.status === "SUCCESS") {
+                currentReformulatedText = data.reformulated_text || 'No reformulated text received.'; // Store for feedback
+                let original_score = parseFloat(data.original_score) || 0;
+                let simplified_score = parseFloat(data.simplified_score) || 0;
+                let difficultyDrop = 'N/A';
+                 if (!isNaN(original_score) && !isNaN(simplified_score) && original_score !== 0) {
+                     difficultyDrop = ((1 - simplified_score / original_score) * 100).toFixed(1);
+                 }
+
+                content.textContent = currentReformulatedText; // Use stored variable
+                tooltip.textContent = `Difficulty decreased by ${difficultyDrop}%`;
+
+                // Update Copy button onclick now that we have text
+                copyButton.onclick = () => {
+                    navigator.clipboard.writeText(currentReformulatedText).then(() => {
+                        copyButton.textContent = '✅';
+                        setTimeout(() => { copyButton.textContent = '📋'; }, 1000);
+                    }).catch(err => console.error('Copy failed:', err));
+                };
+
+                // << Add Feedback Buttons only on SUCCESS >>
+                addFeedbackButtons(footerBar);
+
+            } else {
+                // Handle API failure status (e.g., status: "FAILURE" or other non-SUCCESS status)
+                const failureMsg = data?.message || 'Simplification failed or returned unexpected status.';
+                content.textContent = `Info: ${failureMsg}`;
+                content.style.backgroundColor = '#fff3cd'; // Yellowish info background
+                tooltip.textContent = `Simplification unsuccessful`;
+                // Do NOT add feedback buttons if simplification failed according to API status
             }
-            content.textContent = reformulated_text;
-            tooltip.textContent = `Difficulty decreased by ${difficultyDrop}%`;
-            copyButton.onclick = () => {
-                navigator.clipboard.writeText(reformulated_text).then(() => {
-                    copyButton.textContent = '✅'; setTimeout(() => { copyButton.textContent = '📋'; }, 1000);
-                }).catch(err => console.error('Copy failed:', err));
-            };
         })
         .catch(function(error) {
-             if (!apiPopup) return; // Check if popup still exists
             console.error("API Call Error:", error);
-            if (content) {
-                content.textContent = `Error: ${error.message}`;
-                content.style.backgroundColor = '#ffdddd';
+             if (!apiPopup) return; // Exit if popup was closed
+
+            if (content) { // Check if content div still exists
+                content.textContent = `Error loading simplification: ${error.message}`;
+                content.style.backgroundColor = '#ffdddd'; // Error indication
             }
              tooltip.textContent = `Error loading data`;
+            // Do NOT add feedback buttons on fetch/network error
         });
 }
 
-// Call your Flask API (preloading) - (NO CHANGES HERE)
-// *** Make sure this endpoint is correct for your Flask app! ***
+// Function to add feedback buttons to the footer
+function addFeedbackButtons(footerElement) {
+    footerElement.innerHTML = ''; // Clear just in case
+
+    const feedbackInstructions = document.createElement('span');
+    feedbackInstructions.textContent = 'Rate this simplification:';
+    Object.assign(feedbackInstructions.style, {
+        marginRight: '10px',
+        fontSize: '13px',
+        color: '#6c757d', // Gray text
+        alignSelf: 'center' // Vertically align with buttons
+    });
+
+    const likeButton = document.createElement('button');
+    likeButton.textContent = '👍';
+    likeButton.title = 'Good simplification';
+    Object.assign(likeButton.style, {
+        background: 'none', border: 'none', cursor: 'pointer',
+        fontSize: '18px', padding: '0 5px', marginRight: '5px'
+    });
+
+    const dislikeButton = document.createElement('button');
+    dislikeButton.textContent = '👎';
+    dislikeButton.title = 'Bad simplification';
+    Object.assign(dislikeButton.style, {
+        background: 'none', border: 'none', cursor: 'pointer',
+        fontSize: '18px', padding: '0 5px'
+    });
+
+    // Click handler for feedback buttons
+    const feedbackHandler = (feedbackType) => {
+        handleFeedback(feedbackType);
+        // Visually indicate selection and disable buttons
+        likeButton.disabled = true;
+        dislikeButton.disabled = true;
+        likeButton.style.opacity = '0.5';
+        dislikeButton.style.opacity = '0.5';
+        likeButton.style.cursor = 'default'; // Change cursor
+        dislikeButton.style.cursor = 'default'; // Change cursor
+
+        if (feedbackType === 'like') {
+            likeButton.style.opacity = '1'; // Keep liked one fully visible
+            likeButton.style.transform = 'scale(1.1)'; // Slightly enlarge
+        } else {
+            dislikeButton.style.opacity = '1'; // Keep disliked one fully visible
+            dislikeButton.style.transform = 'scale(1.1)'; // Slightly enlarge
+        }
+        feedbackInstructions.textContent = 'Thanks for feedback!'; // Update text
+    };
+
+    likeButton.onclick = () => feedbackHandler('like');
+    dislikeButton.onclick = () => feedbackHandler('dislike');
+
+    footerElement.appendChild(feedbackInstructions);
+    footerElement.appendChild(likeButton);
+    footerElement.appendChild(dislikeButton);
+}
+
+// Placeholder function to handle the feedback
+function handleFeedback(feedbackType) {
+    console.log(`Feedback Received: ${feedbackType}`);
+    console.log("Original Text:", currentSelectedText); // Log original
+    console.log("Reformulated Text:", currentReformulatedText); // Log reformulated
+
+    // --- TODO LATER: Send feedback to backend ---
+    // const feedbackData = {
+    //     original: currentSelectedText,
+    //     simplified: currentReformulatedText,
+    //     rating: feedbackType
+    // };
+    // fetch('http://localhost:5000/feedback', { // <<< Define this endpoint in Flask
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify(feedbackData)
+    // })
+    // .then(response => {
+    //     if (!response.ok) { console.error('Feedback submission failed:', response.status); }
+    //     else { console.log('Feedback submitted successfully.'); }
+    // })
+    // .catch(error => console.error('Error submitting feedback:', error));
+    // ------------------------------------------
+}
+
+// Call your Flask API (preloading)
+// *** Make sure this endpoint ('/simplify' or '/process') matches your Flask app! ***
 async function callLocalApi(selectedText) {
-    const apiUrl = 'http://localhost:5000/simplify'; // Or /process if you changed Flask
+    const apiUrl = 'http://localhost:5000/simplify'; // CHECK THIS ENDPOINT NAME
 
     try {
         const response = await fetch(apiUrl, {
@@ -140,103 +258,31 @@ async function callLocalApi(selectedText) {
         const responseData = await response.json();
 
         if (!response.ok) {
+            // Use message/error from JSON if available, otherwise fallback
             const errorMessage = responseData?.message || responseData?.error || JSON.stringify(responseData) || response.statusText;
+            console.error(`API Error Response (${response.status}):`, responseData);
             throw new Error(`API Error (${response.status}): ${errorMessage}`);
         }
-        return responseData; // Return the parsed JSON
+        console.log(`✅ API Success Response (${response.status})`);
+        return responseData; // Return the parsed JSON { status, reformulated_text, ... }
 
     } catch (error) {
-        console.error("Fetch/Processing Error:", error);
+        console.error("API Fetch/Processing Error:", error);
+        // Distinguish specific error types for better messages
         if (error.message.includes("Failed to fetch")) {
-             throw new Error("Network error: Could not connect to API.");
+             throw new Error("Network error: Could not connect to API. Is server running & CORS ok?");
         } else if (error instanceof SyntaxError) {
              throw new Error("API response format error: Expected JSON.");
         } else if (error.message.startsWith('API Error')) {
-             throw error; // Re-throw our formatted API error
+             // Re-throw our already formatted API error
+             throw error;
         }
+        // Throw a generic error for other unexpected issues
         throw new Error(`An unexpected error occurred: ${error.message}`);
     }
 }
 
-// << MODIFIED: Renamed and now creates a container with BOTH buttons >>
-function showActionButtons(buttonX, buttonY, selectedText, selectionCenterX, selectionBottomY) {
-    removePopup(); // Remove results popup
-    removeButtonContainer(); // Remove any old button container
-
-    if (!selectedText) {
-        console.warn("⚠️ No selected text provided to showActionButtons.");
-        return;
-    }
-
-    console.log("📌 Showing action buttons container");
-
-    // --- Create the container ---
-    actionButtonContainer = document.createElement('div');
-    Object.assign(actionButtonContainer.style, {
-        position: 'absolute',
-        left: `${buttonX}px`, // Position the container
-        top: `${buttonY}px`,  // Position the container
-        zIndex: 9998,
-        display: 'flex',      // Layout buttons horizontally
-        gap: '5px',           // Space between buttons
-        // Optional styling for the container itself
-        // backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        // padding: '2px',
-        // borderRadius: '5px',
-    });
-
-    // --- 1. Create the ORIGINAL "Simplify Text" button ---
-    const simplifyButton = document.createElement('button');
-    simplifyButton.textContent = "Simplify Text"; // Original text
-    simplifyButton.title = "Simplify selected text";
-    // Original Styling:
-    Object.assign(simplifyButton.style, {
-        padding: '6px 10px', backgroundColor: '#007bff', color: '#fff',
-        border: 'none', borderRadius: '4px', cursor: 'pointer',
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px',
-        fontFamily: 'sans-serif', lineHeight: '1' // Added line height for consistency
-    });
-
-    // Original Action:
-    simplifyButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent triggering mousedown cleanup immediately
-        console.log("🟢 Simplify button clicked");
-        // Pass the *preloaded promise* to showPopup
-        showPopup(currentPreloadPromise, selectionCenterX, selectionBottomY);
-        // Remove the button container after clicking Simplify
-        removeButtonContainer();
-    });
-
-    // --- 2. Create the NEW "Read Aloud" button ---
-    const readAloudButton = document.createElement('button');
-    readAloudButton.textContent = "🔊"; // Speaker icon for TTS
-    readAloudButton.title = "Read selected text aloud";
-    // Styling similar to Simplify button, but maybe different color:
-    Object.assign(readAloudButton.style, {
-        padding: '6px 8px', // Slightly less padding for icon?
-        backgroundColor: '#6c757d', // Gray color
-        color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer',
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px',
-        fontFamily: 'sans-serif', lineHeight: '1' // Added line height
-    });
-
-    // Action for Read Aloud button:
-    readAloudButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent triggering mousedown cleanup immediately
-        console.log("🔊 Read Aloud button clicked");
-        speakText(currentSelectedText); // Use the stored selected text
-        // DO NOT remove the button container here - allow simplifying after reading
-    });
-
-    // --- Add buttons TO the container ---
-    actionButtonContainer.appendChild(simplifyButton);
-    actionButtonContainer.appendChild(readAloudButton);
-
-    // --- Add the CONTAINER to the page ---
-    document.body.appendChild(actionButtonContainer);
-}
-
-// --- NEW: Function to speak text using Web Speech API ---
+// Function to speak text using Web Speech API
 function speakText(textToSpeak) {
     if (!textToSpeak) {
         console.warn("No text provided to speak.");
@@ -274,8 +320,84 @@ function proceedWithSpeech(textToSpeak) {
     window.speechSynthesis.speak(utterance);
 }
 
+// Show the floating action buttons (Simplify & Read Aloud)
+function showActionButtons(buttonX, buttonY, selectedText, selectionCenterX, selectionBottomY) {
+    removePopup(); // Remove results popup
+    removeButtonContainer(); // Remove any old button container
 
-// --- Main event listener for text selection (MODIFIED TO CALL showActionButtons) ---
+    if (!selectedText) {
+        console.warn("⚠️ No selected text provided to showActionButtons.");
+        return;
+    }
+
+    console.log("📌 Showing action buttons container");
+
+    // --- Create the container ---
+    actionButtonContainer = document.createElement('div');
+    Object.assign(actionButtonContainer.style, {
+        position: 'absolute',
+        left: `${buttonX}px`, // Position the container
+        top: `${buttonY}px`,  // Position the container
+        zIndex: 9998,
+        display: 'flex',      // Layout buttons horizontally
+        gap: '5px',           // Space between buttons
+    });
+
+    // --- 1. Create the ORIGINAL "Simplify Text" button ---
+    const simplifyButton = document.createElement('button');
+    simplifyButton.textContent = "Simplify Text"; // Original text
+    simplifyButton.title = "Simplify selected text";
+    // Original Styling:
+    Object.assign(simplifyButton.style, {
+        padding: '6px 10px', backgroundColor: '#007bff', color: '#fff',
+        border: 'none', borderRadius: '4px', cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px',
+        fontFamily: 'sans-serif', lineHeight: '1' // Added line height for consistency
+    });
+
+    // Original Action:
+    simplifyButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent triggering mousedown cleanup immediately
+        console.log("🟢 Simplify button clicked");
+        // Pass the *preloaded promise* to showPopup
+        showPopup(currentPreloadPromise, selectionCenterX, selectionBottomY);
+        // Remove the button container after clicking Simplify
+        removeButtonContainer();
+    });
+
+    // --- 2. Create the "Read Aloud" button ---
+    const readAloudButton = document.createElement('button');
+    readAloudButton.textContent = "🔊"; // Speaker icon for TTS
+    readAloudButton.title = "Read selected text aloud";
+    // Styling similar to Simplify button, but maybe different color:
+    Object.assign(readAloudButton.style, {
+        padding: '6px 8px', // Slightly less padding for icon?
+        backgroundColor: '#6c757d', // Gray color
+        color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px',
+        fontFamily: 'sans-serif', lineHeight: '1' // Added line height
+    });
+
+    // Action for Read Aloud button:
+    readAloudButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent triggering mousedown cleanup immediately
+        console.log("🔊 Read Aloud button clicked");
+        speakText(currentSelectedText); // Use the stored selected text
+        // DO NOT remove the button container here - allow simplifying after reading
+    });
+
+    // --- Add buttons TO the container ---
+    actionButtonContainer.appendChild(simplifyButton);
+    actionButtonContainer.appendChild(readAloudButton);
+
+    // --- Add the CONTAINER to the page ---
+    document.body.appendChild(actionButtonContainer);
+}
+
+
+// --- Event Listeners ---
+
+// Main listener for text selection
 document.addEventListener('mouseup', (event) => {
     // Don't trigger if clicking inside our button container or the result popup
     if ((actionButtonContainer && actionButtonContainer.contains(event.target)) ||
@@ -309,41 +431,43 @@ document.addEventListener('mouseup', (event) => {
             console.log("🖱️ Selected:", selectedText.substring(0, 50) + "...");
 
             currentSelectedText = selectedText;
-            // Preload API call (NO CHANGE)
+            // Preload API call
             currentPreloadPromise = callLocalApi(selectedText);
-            currentPreloadPromise.catch(err => console.warn("Preload API call failed:", err.message)); // Handle error silently
+            // Handle preload errors silently in the background for now
+            currentPreloadPromise.catch(err => console.warn("Preload API call failed:", err.message));
 
-            // << Call the modified function to show BOTH buttons >>
+            // Call the function to show BOTH action buttons
             showActionButtons(buttonContainerX, buttonContainerY, selectedText, centerX, bottomY);
 
         } else if (selectedText.length === 0 && currentSelectedText !== null) {
             // Selection cleared
              console.log("🚫 Selection cleared.");
             removePopup();
-            removeButtonContainer(); // Use new cleanup function
+            removeButtonContainer(); // Use cleanup function for container
             currentSelectedText = null;
             currentPreloadPromise = null;
              if (window.speechSynthesis && window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
             }
         }
-    }, 10);
+        // If selection didn't change, do nothing.
+    }, 10); // Delay allows selection object to update properly
 });
 
-// Cleanup on outside click (MODIFIED TO CHECK CONTAINER)
+// Cleanup on outside click
 document.addEventListener('mousedown', (event) => {
     // Check if the click target is outside BOTH the popup and the button container
-    const clickedOutsidePopup = apiPopup && !apiPopup.contains(event.target);
-    const clickedOutsideButtons = actionButtonContainer && !actionButtonContainer.contains(event.target);
+    const clickedOutsidePopup = !apiPopup || (apiPopup && !apiPopup.contains(event.target));
+    const clickedOutsideButtons = !actionButtonContainer || (actionButtonContainer && !actionButtonContainer.contains(event.target));
 
-    // If we have UI elements showing (popup OR buttons), and the click was outside ALL of them...
+    // If we have UI elements showing (popup OR buttons), and the click was outside ALL active UI...
     if ((apiPopup || actionButtonContainer) && clickedOutsidePopup && clickedOutsideButtons) {
          console.log("🖱️ Clicked outside UI elements, cleaning up.");
         removePopup();
-        removeButtonContainer(); // Use new cleanup function
+        removeButtonContainer(); // Use cleanup function for container
         currentSelectedText = null; // Reset selection state
         currentPreloadPromise = null;
     }
 });
 
-console.log("✅ Local API Text Simplifier Extension Loaded (with added TTS button).");
+console.log("✅ Local API Text Simplifier Extension Loaded (with TTS & Feedback).");
