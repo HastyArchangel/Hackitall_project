@@ -55,7 +55,6 @@ def simplify_text():
     else :
         return jsonify({
             "status": "SUCCESS",
-            "original_text": original_text,
             "original_score": original_score,
             "reformulated_text": reformulated_text,
             "simplified_score": simplified_score,
