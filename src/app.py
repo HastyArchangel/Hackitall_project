@@ -19,8 +19,14 @@ client = genai.Client(api_key=api_key)
 # Sentance Transformer
 model = SentenceTransformer('paraphrase-mpnet-base-v2')
 # NTKL
-nltk.download('words')
+try:
+    nltk.data.find('corpora/words')
+except LookupError:
+    nltk.download('words')
 word_list = set(words.words())
+# Constants
+similarity_tresh = 0
+simplicity_tresh = 0
 
 @app.route('/simplify', methods=['POST'])
 def simplify_text():
@@ -38,7 +44,8 @@ def simplify_text():
 
     similarity = semantic_similarity(model, original_text, reformulated_text)
 
-    if (similarity < 0.5 or abs(original_score - simplified_score) < 0.06):
+    if (similarity < similarity_tresh or 
+        abs(original_score - simplified_score) < simplicity_tresh):
         return jsonify({
             "status": "FAILURE",
             "message": "Unable to reformulate.",
@@ -55,7 +62,7 @@ def simplify_text():
 
 @app.route('/', methods=['GET'])
 def home():
-    return "Simplifier is live on localhost:5000"
+    return "Simplifier is live on http://localhost:5000"
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)

@@ -10,7 +10,11 @@ payload2 = {
     "text": "When I reflect on the course of my life, I cannot but lament my own vanity, in endeavoring to please my countrymen, by making them wiser and better, which, however, it was an honest intention, hath proved the very cause of my ruin. For, however, it hath been my good fortune to do some good, I am yet pursued with a perpetual resentment, for having presumed to censure the follies and corruptions of mankind."
 }
 
-response = requests.post(url, json=payload2)
+payload3 = {
+    "text": "This is incomprehensible to think of in the light of the previous events"
+}
+
+response = requests.post(url, json=payload3)
 
 print("Response:")
 print(response.json())
