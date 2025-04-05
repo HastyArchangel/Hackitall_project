@@ -26,19 +26,18 @@ function showPopup(text, selectionCenterX, bottomY) {
 
     apiPopup = document.createElement('div');
     apiPopup.id = 'local-api-response-popup';
-    apiPopup.textContent = 'Loading...';
 
     const popupWidth = 500;
     const leftX = selectionCenterX - popupWidth / 2;
-    const topY = bottomY + 20; // Slightly below selection
+    const topY = bottomY + 20;
 
+    // Style the popup container
     Object.assign(apiPopup.style, {
         position: 'absolute',
         left: `${leftX}px`,
         top: `${topY}px`,
         zIndex: 9999,
         maxWidth: `${popupWidth}px`,
-        padding: '14px 18px',
         backgroundColor: '#f5f5f5',
         border: '2px solid #28a745',
         borderRadius: '10px',
@@ -50,22 +49,109 @@ function showPopup(text, selectionCenterX, bottomY) {
         fontFamily: 'sans-serif'
     });
 
+    // Create the header bar (with info and close button)
+    const headerBar = document.createElement('div');
+    Object.assign(headerBar.style, {
+        display: 'flex',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        padding: '6px 10px',
+        borderBottom: '1px solid #ddd',
+        fontSize: '14px',
+        backgroundColor: '#e9fbe9',
+        borderTopLeftRadius: '10px',
+        borderTopRightRadius: '10px'
+    });
+
+    // Info button with tooltip
+    const infoButton = document.createElement('span');
+    infoButton.textContent = 'ℹ️';
+    Object.assign(infoButton.style, {
+        marginRight: '8px',
+        cursor: 'pointer',
+        position: 'relative'
+    });
+
+    // Tooltip element
+    const tooltip = document.createElement('div');
+    tooltip.textContent = 'Reading ease improved by ~43%'; // Placeholder text
+    Object.assign(tooltip.style, {
+        visibility: 'hidden',
+        backgroundColor: '#333',
+        color: '#fff',
+        textAlign: 'center',
+        borderRadius: '4px',
+        padding: '4px 8px',
+        position: 'absolute',
+        bottom: '125%',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        whiteSpace: 'nowrap',
+        zIndex: '99999',
+        fontSize: '12px',
+        opacity: 0,
+        transition: 'opacity 0.3s'
+    });
+
+    // Show/hide tooltip on hover
+    infoButton.addEventListener('mouseenter', () => {
+        tooltip.style.visibility = 'visible';
+        tooltip.style.opacity = '1';
+    });
+    infoButton.addEventListener('mouseleave', () => {
+        tooltip.style.visibility = 'hidden';
+        tooltip.style.opacity = '0';
+    });
+
+    infoButton.appendChild(tooltip);
+    headerBar.appendChild(infoButton);
+
+    // Close button
+    const closeButton = document.createElement('span');
+    closeButton.textContent = '✖';
+    Object.assign(closeButton.style, {
+        cursor: 'pointer',
+        fontWeight: 'bold'
+    });
+    closeButton.onclick = () => removePopup();
+    headerBar.appendChild(closeButton);
+
+    // Content container
+    const content = document.createElement('div');
+    content.textContent = 'Loading...';
+    Object.assign(content.style, {
+        padding: '14px 18px'
+    });
+
+    apiPopup.appendChild(headerBar);
+    apiPopup.appendChild(content);
     document.body.appendChild(apiPopup);
 
+    // Load the actual response
     currentPreloadPromise
-        .then(responseText => {
-            console.log("✅ API response received:", responseText);
-            if (apiPopup) {
-                apiPopup.textContent = responseText;
-            }
-        })
-        .catch(error => {
-            console.error("API Call Error:", error);
-            if (apiPopup) {
-                apiPopup.textContent = `Error: ${error.message}`;
-                apiPopup.style.backgroundColor = '#ffdddd';
-            }
-        });
+    .then(function(data) {
+        console.log("✅ API full response received:", data);
+
+        let reformulated_text = data.reformulated_text || 'No reformulated text';
+        let original_score = parseFloat(data.original_score) || 0;
+        let simplified_score = parseFloat(data.simplified_score) || 0;
+        let semantic_similarity = parseFloat(data.semantic_similarity) || 0;
+
+        let difficultyDrop = 'N/A';
+        if (original_score > 0 && simplified_score >= 0) {
+            difficultyDrop = ((1 - simplified_score / original_score) * 100).toFixed(1);
+        }
+
+        content.textContent = reformulated_text;
+        tooltip.textContent = `Difficulty decreased by ${difficultyDrop}%`;
+    })
+    .catch(function(error) {
+        console.error("API Call Error:", error);
+        if (content) {
+            content.textContent = `Error: ${error.message}`;
+            content.style.backgroundColor = '#ffdddd';
+        }
+    });
 }
 
 // Call your Flask API (preloading)
@@ -84,8 +170,7 @@ async function callLocalApi(selectedText) {
             throw new Error(`API Error (${response.status}): ${errorBody || response.statusText}`);
         }
 
-        const json = await response.json();
-        return json.reformulated_text;
+        return await response.json();
 
     } catch (error) {
         console.error("Fetch failed:", error);
@@ -158,8 +243,9 @@ document.addEventListener('mouseup', (event) => {
             const buttonY = window.scrollY + startRect.top - 35;
 
             // For centering the popup below selection
-            const centerX = window.scrollX + (startRect.left + startRect.right) / 2;
-            const bottomY = window.scrollY + startRect.bottom;
+            const fullRect = range.getBoundingClientRect();
+            const centerX = window.scrollX + (fullRect.left + fullRect.right) / 2;
+            const bottomY = window.scrollY + fullRect.bottom;
 
             console.log("🖱️ Selected:", selectedText);
 
