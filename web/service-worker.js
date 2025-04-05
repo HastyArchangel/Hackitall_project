@@ -1,64 +1,42 @@
-// service-worker.js
+// service-worker.js (Background Script)
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log("Service Worker received message:", message);
-  
-    switch (message.type) {
-      case 'TOGGLE_SIMPLIFY':
-        console.log(`Simplify feature ${message.enabled ? 'enabled' : 'disabled'}`);
-        // --- Add your actual logic here ---
-        // Example: Store the value again or trigger actions based on the toggle
-        // Maybe inject/remove content scripts, enable/disable listeners, etc.
-        chrome.storage.local.set({ isSimplifyActive: message.enabled }); // Example using local storage
-        // Respond to popup (optional)
-        sendResponse({ success: true, feature: 'simplify', state: message.enabled });
-        break; // <- Important!
-  
-      case 'TOGGLE_TTS':
-        console.log(`Text to Speech feature ${message.enabled ? 'enabled' : 'disabled'}`);
-        // --- Add your actual logic here ---
-        // Example: enable/disable TTS listeners or functionality
-         chrome.storage.local.set({ isTTSActive: message.enabled }); // Example
-        // Respond to popup (optional)
-         sendResponse({ success: true, feature: 'tts', state: message.enabled });
-         break; // <- Important!
-  
-      // Keep other message handlers if you have them
-      // case 'POPUP_ACTION': ...
-  
-      default:
-        console.log("Unknown message type received:", message.type);
-        // Handle unknown messages or ignore
-         sendResponse({ success: false, error: "Unknown message type" });
-        break;
+// Listen for commands defined in manifest.json
+chrome.commands.onCommand.addListener((command, tab) => {
+  console.log(`Service Worker: Command received: ${command}`);
+
+  // Check which command was triggered
+  if (command === "simplify-text" || command === "read-aloud") {
+    // Ensure we have a valid tab context where the content script might be running
+    if (tab && tab.id) {
+        console.log(`Service Worker: Sending action "${command}" to tab ${tab.id}`);
+        // Send a message to the content script in the active tab
+        chrome.tabs.sendMessage(
+            tab.id,
+            { action: command }, // Send the command name as the action
+            (response) => {
+                // The response callback allows the content script to confirm receipt or report status
+                if (chrome.runtime.lastError) {
+                    // Common error: Content script not injected or not listening on that page/tab
+                    console.warn(`Service Worker: Could not send message to tab ${tab.id} for action "${command}". Receiving end does not exist? Error: ${chrome.runtime.lastError.message}`);
+                } else if (response) {
+                    console.log(`Service Worker: Response from content script for action "${command}":`, response.status);
+                } else {
+                     console.log(`Service Worker: Message sent for action "${command}", but no response received (might be okay).`);
+                }
+            }
+        );
+    } else {
+         console.warn(`Service Worker: Command "${command}" received but no active tab found or tab ID missing.`);
     }
-  
-    // Return true if you intend to send a response asynchronously
-    // In this basic example, responses are synchronous, so it's not strictly needed
-    // but good practice if any branch might become async later.
-    // return true;
-  });
-  
-  
-  // Optional: Listen for storage changes if background logic depends on it directly
-  chrome.storage.onChanged.addListener((changes, namespace) => {
-    for (let [key, { oldValue, newValue }] of Object.entries(changes)) {
-       console.log(
-        `Storage key "${key}" in namespace "${namespace}" changed.`,
-        `Old value was "${oldValue}", new value is "${newValue}".`
-       );
-  
-       if (namespace === 'sync') { // Check if it's the sync storage we used
-          if (key === 'simplifyEnabled') {
-              console.log(`Background detected Simplify toggle changed to: ${newValue}`);
-              // Update internal state or behavior based on the new value
-          } else if (key === 'ttsEnabled') {
-              console.log(`Background detected TTS toggle changed to: ${newValue}`);
-               // Update internal state or behavior based on the new value
-          }
-       }
-    }
-  });
-  
-  
-  console.log("Service worker started.");
+  }
+});
+
+// Optional: Log installation/update
+chrome.runtime.onInstalled.addListener((details) => {
+  console.log(`Service Worker: Extension ${details.reason}. Previous version: ${details.previousVersion}`);
+});
+
+// Optional: Keep alive slightly for message passing if needed, though usually not required for commands
+// chrome.runtime.onConnect.addListener(port => {
+//   console.log("Service Worker: Connection established", port);
+// });
