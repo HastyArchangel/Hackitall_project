@@ -1,10 +1,29 @@
 {
     "manifest_version": 3,
-    "name": "Local API Text Selector",
+    "name": "Simplify",
     "version": "1.0",
     "description": "Select text, send it to a local API (localhost:5000), and display the response.",
     "permissions": [
+       "activeTab",
+       "scripting",
+       "storage"
     ],
+    "background": {
+      "service_worker": "service-worker.js"
+    },
+    "action": {
+      "default_icon": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png"
+      },
+      "default_title": "Simplify",
+      "default_popup": "popup/popup.html"
+    },
+    "icons": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
     "host_permissions": [
       "http://localhost:5000/*"
     ],

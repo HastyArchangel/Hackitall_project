@@ -6,6 +6,57 @@ let currentSelectedText = null; // Currently selected text to avoid re-triggerin
 let currentReformulatedText = null; // Store reformulated text for feedback
 let utterance = null;           // To hold the current speech utterance
 
+// <<< NEW: Variables to hold toggle states >>>
+let simplifyFeatureEnabled = true; // Default state (can be adjusted)
+let ttsFeatureEnabled = true;      // Default state (can be adjusted)
+
+
+// --- Initial State Loading & Listener ---
+
+// Function to load initial states from storage
+function loadInitialToggleStates() {
+    chrome.storage.sync.get(['simplifyEnabled', 'ttsEnabled'], (result) => {
+        if (chrome.runtime.lastError) {
+            console.error("Content Script: Error loading toggle states:", chrome.runtime.lastError);
+            // Keep defaults if error occurs
+            return;
+        }
+        // Use saved value if it exists, otherwise keep the default
+        simplifyFeatureEnabled = (typeof result.simplifyEnabled === 'boolean') ? result.simplifyEnabled : simplifyFeatureEnabled;
+        ttsFeatureEnabled      = (typeof result.ttsEnabled      === 'boolean') ? result.ttsEnabled      : ttsFeatureEnabled;
+        console.log(`Content Script: Initial states loaded - Simplify: ${simplifyFeatureEnabled}, TTS: ${ttsFeatureEnabled}`);
+    });
+}
+
+// Listen for changes made via the popup
+chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'sync') {
+        let updated = false;
+        if (changes.simplifyEnabled) {
+            simplifyFeatureEnabled = !!changes.simplifyEnabled.newValue; // Ensure boolean
+            console.log(`Content Script: Simplify toggle changed to: ${simplifyFeatureEnabled}`);
+            updated = true;
+        }
+        if (changes.ttsEnabled) {
+            ttsFeatureEnabled = !!changes.ttsEnabled.newValue; // Ensure boolean
+            console.log(`Content Script: TTS toggle changed to: ${ttsFeatureEnabled}`);
+            updated = true;
+        }
+
+        // If toggles changed, and buttons are currently showing, remove them
+        // so they reappear correctly on the *next* selection.
+        // (Alternatively, you could try to dynamically add/remove buttons, but hiding is simpler)
+        if (updated && actionButtonContainer) {
+             console.log("Toggles changed while buttons visible, removing buttons.");
+             // removeButtonContainer(); // Optionally hide immediately
+        }
+    }
+});
+
+// Load the initial states when the script loads
+loadInitialToggleStates();
+
+
 // --- Cleanup Functions ---
 
 // Remove the result popup if it exists
@@ -320,7 +371,7 @@ function proceedWithSpeech(textToSpeak) {
     window.speechSynthesis.speak(utterance);
 }
 
-// Show the floating action buttons (Simplify & Read Aloud)
+// <<< MODIFIED >>> Show the floating action buttons based on toggle state
 function showActionButtons(buttonX, buttonY, selectedText, selectionCenterX, selectionBottomY) {
     removePopup(); // Remove results popup
     removeButtonContainer(); // Remove any old button container
@@ -330,7 +381,13 @@ function showActionButtons(buttonX, buttonY, selectedText, selectionCenterX, sel
         return;
     }
 
-    console.log("📌 Showing action buttons container");
+     // --- Check if ANY button should be shown ---
+     if (!simplifyFeatureEnabled && !ttsFeatureEnabled) {
+         console.log("📌 Both Simplify and TTS features are disabled. Not showing buttons.");
+         return; // Exit if both toggles are off
+     }
+
+    console.log(`📌 Showing action buttons container (Simplify: ${simplifyFeatureEnabled}, TTS: ${ttsFeatureEnabled})`);
 
     // --- Create the container ---
     actionButtonContainer = document.createElement('div');
@@ -343,55 +400,63 @@ function showActionButtons(buttonX, buttonY, selectedText, selectionCenterX, sel
         gap: '5px',           // Space between buttons
     });
 
-    // --- 1. Create the ORIGINAL "Simplify Text" button ---
-    const simplifyButton = document.createElement('button');
-    simplifyButton.textContent = "Simplify Text"; // Original text
-    simplifyButton.title = "Simplify selected text";
-    // Original Styling:
-    Object.assign(simplifyButton.style, {
-        padding: '6px 10px', backgroundColor: '#007bff', color: '#fff',
-        border: 'none', borderRadius: '4px', cursor: 'pointer',
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px',
-        fontFamily: 'sans-serif', lineHeight: '1' // Added line height for consistency
-    });
+    let buttonsAdded = 0; // Counter to see if we add any buttons
 
-    // Original Action:
-    simplifyButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent triggering mousedown cleanup immediately
-        console.log("🟢 Simplify button clicked");
-        // Pass the *preloaded promise* to showPopup
-        showPopup(currentPreloadPromise, selectionCenterX, selectionBottomY);
-        // Remove the button container after clicking Simplify
-        removeButtonContainer();
-    });
+    // --- 1. Conditionally create the "Simplify Text" button ---
+    if (simplifyFeatureEnabled) {
+        const simplifyButton = document.createElement('button');
+        simplifyButton.textContent = "Simplify Text";
+        simplifyButton.title = "Simplify selected text";
+        Object.assign(simplifyButton.style, {
+            padding: '6px 10px', backgroundColor: '#007bff', color: '#fff',
+            border: 'none', borderRadius: '4px', cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px',
+            fontFamily: 'sans-serif', lineHeight: '1'
+        });
+        simplifyButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log("🟢 Simplify button clicked");
+            showPopup(currentPreloadPromise, selectionCenterX, selectionBottomY);
+            removeButtonContainer();
+        });
+        actionButtonContainer.appendChild(simplifyButton);
+        buttonsAdded++;
+    } else {
+        console.log("🔧 Simplify feature disabled, not adding button.");
+    }
 
-    // --- 2. Create the "Read Aloud" button ---
-    const readAloudButton = document.createElement('button');
-    readAloudButton.textContent = "🔊"; // Speaker icon for TTS
-    readAloudButton.title = "Read selected text aloud";
-    // Styling similar to Simplify button, but maybe different color:
-    Object.assign(readAloudButton.style, {
-        padding: '6px 8px', // Slightly less padding for icon?
-        backgroundColor: '#6c757d', // Gray color
-        color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer',
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px',
-        fontFamily: 'sans-serif', lineHeight: '1' // Added line height
-    });
 
-    // Action for Read Aloud button:
-    readAloudButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent triggering mousedown cleanup immediately
-        console.log("🔊 Read Aloud button clicked");
-        speakText(currentSelectedText); // Use the stored selected text
-        // DO NOT remove the button container here - allow simplifying after reading
-    });
+    // --- 2. Conditionally create the "Read Aloud" button ---
+    if (ttsFeatureEnabled) {
+        const readAloudButton = document.createElement('button');
+        readAloudButton.textContent = "🔊";
+        readAloudButton.title = "Read selected text aloud";
+        Object.assign(readAloudButton.style, {
+            padding: '6px 8px', backgroundColor: '#6c757d',
+            color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px',
+            fontFamily: 'sans-serif', lineHeight: '1'
+        });
+        readAloudButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log("🔊 Read Aloud button clicked");
+            speakText(currentSelectedText);
+        });
+        actionButtonContainer.appendChild(readAloudButton);
+        buttonsAdded++;
+    } else {
+         console.log("🔧 TTS feature disabled, not adding button.");
+    }
 
-    // --- Add buttons TO the container ---
-    actionButtonContainer.appendChild(simplifyButton);
-    actionButtonContainer.appendChild(readAloudButton);
 
-    // --- Add the CONTAINER to the page ---
-    document.body.appendChild(actionButtonContainer);
+    // --- Add the CONTAINER to the page ONLY if buttons were added ---
+    if (buttonsAdded > 0) {
+        document.body.appendChild(actionButtonContainer);
+    } else {
+        // If no buttons were added (e.g., somehow logic failed or both disabled), clean up container
+        actionButtonContainer = null;
+        console.log("🤔 No buttons were enabled, not adding container to body.");
+    }
 }
 
 
@@ -431,12 +496,17 @@ document.addEventListener('mouseup', (event) => {
             console.log("🖱️ Selected:", selectedText.substring(0, 50) + "...");
 
             currentSelectedText = selectedText;
-            // Preload API call
-            currentPreloadPromise = callLocalApi(selectedText);
-            // Handle preload errors silently in the background for now
-            currentPreloadPromise.catch(err => console.warn("Preload API call failed:", err.message));
 
-            // Call the function to show BOTH action buttons
+            // Preload API call ONLY if simplify feature is enabled
+            if (simplifyFeatureEnabled) {
+                 currentPreloadPromise = callLocalApi(selectedText);
+                 // Handle preload errors silently
+                 currentPreloadPromise.catch(err => console.warn("Preload API call failed:", err.message));
+            } else {
+                currentPreloadPromise = null; // Ensure promise is null if feature disabled
+            }
+
+            // Call the function to show action buttons (it will now check toggles internally)
             showActionButtons(buttonContainerX, buttonContainerY, selectedText, centerX, bottomY);
 
         } else if (selectedText.length === 0 && currentSelectedText !== null) {
@@ -470,4 +540,4 @@ document.addEventListener('mousedown', (event) => {
     }
 });
 
-console.log("✅ Local API Text Simplifier Extension Loaded (with TTS & Feedback).");
+console.log("✅ Local API Text Simplifier Extension Loaded (with Toggle Checks, TTS & Feedback).");
