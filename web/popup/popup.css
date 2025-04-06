@@ -1,0 +1,118 @@
+/* General Popup Styling */
+body {
+    font-family: sans-serif;
+    background-color: #282c34; /* Dark background */
+    color: #f0f0f0;          /* Light text */
+    width: 220px;            /* Adjust width as needed */
+    padding: 15px;
+    margin: 0;               /* Important: Ensure no default margin */
+    box-sizing: border-box;
+    border-radius: 12px;     /* --- Add this line for rounded corners --- */
+    /* overflow: hidden; */  /* Optional: Add if content sometimes visually bleeds outside the rounded corners */
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center items horizontally */
+}
+
+/* Logo Styling */
+#logo {
+    display: block;       /* Needed for margin auto centering */
+    width: 64px;          /* Adjust size as needed */
+    height: 64px;
+    margin-bottom: 5px;  /* Space below logo */
+}
+
+/* Title Text Styling */
+.title-text {
+    margin: 0 0 15px 0;   /* Remove top margin, add bottom margin */
+    font-size: 1.1em;
+    font-weight: bold;
+    color: #abb2bf;       /* Slightly lighter grey for title */
+}
+
+/* Separator */
+.separator {
+    border: 0;
+    height: 1px;
+    background-color: #4b5263; /* Darker separator line */
+    width: 100%;
+    margin: 10px 0 15px 0; /* Spacing around separator */
+}
+
+
+/* Toggle Row Layout */
+.toggle-row {
+    display: flex;
+    justify-content: space-between; /* Label on left, toggle on right */
+    align-items: center;
+    width: 100%;
+    margin-bottom: 12px; /* Space between toggle rows */
+}
+
+.toggle-row label:first-child { /* Style the text label */
+    margin-right: 10px;
+    font-size: 0.95em;
+}
+
+
+/* The switch - a container for the checkbox and slider */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;  /* Width of the toggle switch */
+  height: 24px; /* Height of the toggle switch */
+  flex-shrink: 0; /* Prevent shrinking if label is long */
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider (the track and the knob) */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #4b5263; /* Track color when OFF */
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px; /* Height of the knob */
+  width: 18px;  /* Width of the knob */
+  left: 3px;    /* Position from left when OFF */
+  bottom: 3px;  /* Position from bottom */
+  background-color: #f0f0f0; /* Knob color */
+  transition: .4s;
+}
+
+/* --- Checked State --- */
+input:checked + .slider {
+  background-color: #4CAF50; /* Track color when ON (e.g., blue) */
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px); /* Move knob to the right */
+   /* Calculation: width (50) - knob_width (18) - left_pos (3) - right_gap (3) = 26 */
+   /* Adjust this value if you change switch/knob dimensions */
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 24px; /* Make the track rounded */
+}
+
+.slider.round:before {
+  border-radius: 50%; /* Make the knob circular */
+}
