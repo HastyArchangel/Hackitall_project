@@ -301,7 +301,7 @@ function showActionButtons(buttonX, buttonY, selectedText, selectionCenterX, sel
 
     if (simplifyFeatureEnabled) {
         const simplifyButton = document.createElement('button');
-        simplifyButton.textContent = "Simplify"; simplifyButton.title = "Simplify selected text";
+        simplifyButton.textContent = "SIMPLIFY"; simplifyButton.title = "Simplify selected text";
         Object.assign(simplifyButton.style, { padding: '6px 10px', backgroundColor: greenColor, color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)', fontSize: '14px', fontFamily: 'sans-serif', lineHeight: '1' });
         simplifyButton.addEventListener('click', (e) => {
             e.stopPropagation(); console.log("🟢 Simplify button clicked");
