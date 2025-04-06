@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Simplify & Read Aloud",  
+  "name": "Simplify",  
   "version": "1.1", 
   "description": "Select text, simplify it via local API, read it aloud, or give feedback. Includes keyboard shortcuts and toggles.",
   "permissions": [

@@ -155,7 +155,7 @@ function showPopup(textDataPromise, selectionCenterX, bottomY) {
                      difficultyDrop = ((1 - simplified_score / original_score) * 100).toFixed(1);
                  }
                 content.textContent = currentReformulatedText;
-                tooltip.textContent = `Reading comprehension increased by ${difficultyDrop}%`;
+                tooltip.textContent = `Reading difficulty decreased by ${difficultyDrop}%`;
                 copyButton.onclick = () => {
                     navigator.clipboard.writeText(currentReformulatedText).then(() => { copyButton.textContent = '✅'; setTimeout(() => { copyButton.textContent = '📋'; }, 1000); }).catch(err => console.error('Copy failed:', err));
                 };
